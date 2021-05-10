@@ -1,0 +1,207 @@
+---
+title: 'Case Study 1: Cyclist Bike Share'
+author: "Joebert Rosaes"
+date: "5/9/2021"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+
+### Introduction
+**Cyclist** Bike Share is a bike-sharing company in Chicago. Their service includes annual membership options and also options for casual riders. The stakeholder, Director of Marketing, believes that the company's future success depends on maximizing the number of annual memberships. To do so, the team are hoping to know the key differences between casual and annual members of Cyclistic bikes.
+
+
+### Key Questions (Ask)
+1. What are the differences on how the casual and annual members use the service? 
+2. What are the key factors that could help the business attract the more casual users to subscribe annually? 
+
+
+### The Data (Prepare)
+The data we will be using is data of all the ride transactions taken from April 2020 to April 2021 (13th months). The data is in **.csv format** and we have taken data cleaning processes to ensure that the data is reliable, original, current, comprehensive, and cited. Each data cleaning steps in while the data was in .csv format was recorded. 
+
+
+### The Data Cleaning Process (Process)
+The following steps were performed on each csv file containing monthly data were taken to ensure that the data is prepared for Analysis.
+
+1. Removed Duplicates in Excel under **Data -> Remove Duplicates**
+2. Removed Rows with Blank Entries. For this I added formula below to each row, a new column, that counts if a cell in the row is empty. Then, simple filtering will show the rows tagged as `"del"` and delete all the shown rows.
+```
+=IF(COUNTA(A2:M2) < 13 , "del", "ok")
+```
+3. Simple Filtering in Excel for each column will show the values each column should have, this was applied to `member_casual and rideable_type` column.
+4. Properly transform the data types of the columns. Set the `latitudes` to number and `set ride_id, station_names, rideable_type,` and `member_casual` to text
+5. Get the trip duration using the `started_at` and `ended_at` columns and create a new number column, `trip_duration`. I used the following formula to ensure that the trip_duration will yield a positive format and in minutes with F2 containing the `ended_at` and E2 with `started_at`.
+```
+=IF(F2 > E2, F2-E2, E2-F2) * 24 * 60
+```
+6. Insert a month Column with the respective month and abbreviaton. Apr, 20. Please take note that this is a mistake in purpose to show data transformation/data cleaning in R later on.
+7. Insert a weekday column using `=WEEKDAY(E2, 1)` which will yields numbers from 1 (Sunday) - 7 (Saturday),
+
+
+### The Analysis using R and SQL (Analyze and Visualize)
+The following script below were used to clean the data and utilize the data for analysis and visualization processes. 
+
+Install and load necessary packages
+```{r message=FALSE, warning=FALSE, error=FALSE}
+#install.packages("tidyverse")
+#install.packages("gapminder")
+library(tidyverse)
+library(ggplot2)
+library(dplyr)
+library(gapminder)
+```
+
+Set working directory and load the data
+```{r tidy=TRUE,message=FALSE}
+setwd("C:/Users/bert/Desktop/Case Study 1/Data")
+file_names <- dir() 
+cyclist_data <- do.call(rbind,lapply(file_names,read.csv))
+```
+
+We can also see a quick view of our data in contained in `cyclist_data`
+```{r}
+str(cyclist_data)
+```
+
+Minor Data Cleaning Tasks. One is to format the `month` to a format that can be arranged. For example Apr-2020 will be 20-04. Also the `weekday` should be transformed to a proper format. To do, the following script will be run.
+```{r }
+## Transform the month column
+cyclist_data$month[cyclist_data$month == "Apr, 20"] <- "20-04"
+cyclist_data$month[cyclist_data$month == "May, 20"] <- "20-05"
+cyclist_data$month[cyclist_data$month == "Jun, 20"] <- "20-06"
+cyclist_data$month[cyclist_data$month == "Jul, 20"] <- "20-07"
+cyclist_data$month[cyclist_data$month == "Aug, 20"] <- "20-08"
+cyclist_data$month[cyclist_data$month == "Sep, 20"] <- "20-09"
+cyclist_data$month[cyclist_data$month == "Oct, 20"] <- "20-10"
+cyclist_data$month[cyclist_data$month == "Nov, 20"] <- "20-11"
+cyclist_data$month[cyclist_data$month == "Dec, 20"] <- "20-12"
+cyclist_data$month[cyclist_data$month == "Jan, 21"] <- "21-01"
+cyclist_data$month[cyclist_data$month == "Feb, 21"] <- "21-02"
+cyclist_data$month[cyclist_data$month == "Mar, 21"] <- "21-03"
+cyclist_data$month[cyclist_data$month == "Apr, 21"] <- "21-04"
+
+## Transform the weekday column
+cyclist_data$weekday <- as.character(cyclist_data$weekday)
+
+
+```
+
+Final Verification of data before we analyze. For this step, we just printed the unique values for key columns in our dataset such as `rideable_type, month, weekday, and member_casual`
+```{r tidy=FALSE}
+unique(cyclist_data[c("rideable_type")])
+unique(cyclist_data[c("month")])
+unique(cyclist_data[c("weekday")])
+unique(cyclist_data[c("member_casual")])
+```
+
+Now that we verified that the data is cleaned, its time to start analysing our data. The data aggregation steps will be shown in both R and SQL. For SQL, we assume that the `cyclist_data` data frame is the table
+
+First is for us to check the average trip duration each member type generates per month. This will give us an overview of frequency of each member type that uses our service. The SQL equivalent of the aggregation is also shown
+```{r message=FALSE,}
+transformed_df <- cyclist_data %>% group_by(month,member_casual) %>% summarize(count = n()) %>% arrange(month)
+```
+```{sql eval=FALSE}
+SELECT month, member_casual, count(*)
+FROM cyclist_data
+GROUP BY month, member_casual
+```
+
+Now that we got our aggregated in `transformed_df`, we can now plot the graph to visualize it
+```{r}
+ggplot(data=transformed_df, aes(fill=member_casual, y=count, x=month)) + geom_bar(position="dodge", stat="identity") + labs(title = "Total trips of each member type per month", caption="From Apr-2020 to Apr-2021", y="No. of Trips", fill="Member type") + theme(axis.text.x  = element_text(angle=-90, hjust=0.5, size=11,colour="black")) 
+```
+
+Next, we check how frequent each member type uses the service in a week.
+```{r message=FALSE,}
+transformed_df <- cyclist_data %>% group_by(weekday,member_casual) %>% summarize(count = n()) %>% arrange(weekday)
+```
+```{sql eval=FALSE}
+SELECT weekday, member_casual, count(*)
+FROM cyclist_data
+GROUP BY weekday, member_casual
+```
+
+Now that we got our aggregated in `transformed_df`, we can now plot the graph to visualize it
+```{r}
+ggplot(data=transformed_df, aes(fill=member_casual, y=count, x=weekday)) + geom_bar(position="dodge", stat="identity") + labs(title = "Total trips of each member type does in a week", caption="1-Sunday to 7-Saturday", y="No. of Trips", fill="Member type") + theme(axis.text.x  = element_text( hjust=0.5, size=11,colour="black")) 
+```
+
+> **Key Takeaway:** From the two graphs created, we can see that more annual members are using the service per month. However in a weekly basis, we can see a surge of casual riders during the weekends, Saturday and Sunday but most of the days in the week is still dominatetd by the annual members.
+
+Next, we check the average trip duration of each member type in a week.
+```{r message=FALSE,}
+transformed_df <- cyclist_data %>% select(weekday, member_casual,trip_duration) %>% group_by(weekday,member_casual) %>% summarise(ave_trip_duration = mean(trip_duration))
+```
+```{sql eval=FALSE}
+SELECT weekday, member_casual, AVG(trip_duration)
+FROM cyclist_data
+GROUP BY weekday, member_casual
+```
+
+Now that we got our aggregated in `transformed_df`, we can now plot the graph to visualize it
+```{r}
+ggplot(data=transformed_df, aes(fill=member_casual, y=weekday, x=ave_trip_duration)) + geom_bar(position="dodge", stat="identity") + labs(title = "Average trip duration of each member type in a week",  caption="1-Sunday to 7-Saturday", y="Weekday", x="Average trip duration (in mins)", fill="Member type") + theme(axis.text.x  = element_text(hjust=0.5, size=11,colour="black")) 
+```
+
+> **Key Takeaway:** Casual Members take longer trips compared to annual members. 
+
+Next, we will be checking the top 15 stations with many traffic from casual members. This can help the marketing team to know which locations to target when employing a new marketing campaign
+
+```{r message=FALSE}
+start_stations <- cyclist_data %>% filter(member_casual == "casual") %>% select(start_station_name) %>% group_by(start_station_name) %>% summarise(count=n()) %>% arrange(desc(count)) 
+end_stations <- cyclist_data %>% filter(member_casual == "casual") %>% select(end_station_name) %>% group_by(end_station_name) %>% summarise(count=n()) %>% arrange(desc(count)) 
+stations <- merge(start_stations, end_stations, by.x=c("start_station_name"), by.y=c("end_station_name")) %>% group_by(start_station_name) %>% summarize(total_traffic = count.x + count.y) %>% arrange(desc(total_traffic)) %>% head(15)
+```
+```{sql eval=FALSE}
+SELECT start_station_name as station_name, count(*)
+FROM (
+  SELECT start_station_name FROM cyclist_data WHERE member_casual == "casual"
+  UNION ALL
+  SELECT end_station_name FROM cyclist_data WHERE member_casual == "casual"
+)
+GROUP BY station_name
+ORDER BY count desc
+LIMIT 15
+```
+
+
+As usual, Visualizing the data will help us understand it more
+```{r}
+ggplot(data=stations, aes(fill=start_station_name, x=total_traffic, y=reorder(start_station_name, total_traffic))) + geom_bar(position="dodge", stat="identity") + labs(title = "Top 15 stations with heavy traffic from casual users", x="Total Traffic", y="Station Name") + theme(axis.text.x  = element_text(angle=-90,hjust=0.5, size=11,colour="black"), legend.position = "none")
+```
+
+>**Key Takeaway:** The visualization shows the top 15 stations with heavy traffic from casual riders with Top 3: Streeter Dr & Grand Ave, Lake Shore Dr & Monroe St, and Millenium Park.
+
+Lastly, we will check which ride type is more popular on casual riders
+```{r}
+transformed_df <- cyclist_data %>% filter(member_casual == "casual") %>% select(rideable_type) %>% group_by(rideable_type) %>% summarise(count = n()) %>%  mutate(per = round(count/sum(count)* 100, digits=2), percent=paste(per, '%'))
+```
+``` {sql eval=FALSE}
+SELECT rideable_type, count(*) as count
+FROM cyclist_data
+WHERE member_casual = "casual"
+GROUP BY rideable_type
+```
+
+``` {r}
+ggplot(transformed_df, aes(x="", y=per, fill=rideable_type)) +
+  geom_bar(stat="identity", width=1) + coord_polar(theta = "y", start = 0) + theme_void() + geom_text(aes(x=1.2, y = cumsum(per) - per/2, label=percent)) + labs(title = "Top Ride type among casual members", x="Total Traffic", y="Station Name", fill="Ride Type")
+```
+
+> **Key Takeaway:** Docked bike is the most popular ride-type for Casual riders taking up 77.42% of ride types.
+
+
+### Conclusions and Recommendation (Share and Act)
+Based on the processes and analysis done on the data set provided, we can therefore conclude the following takeaways from the data:
+
+1. There are more rides taken by annual members than casual members every month.
+2. There is a surge in casual rider trips during the weekends in a week.
+3. Casual riders take longer trips than annual riders for every trip
+4. Majority of casual riders use docked-type bicycle
+
+The following recommendations might help the business when preparing a marketing campaign to attract more annual members:
+
+1. Prepare marketing campaigns based on weekend promos as there are more casual riders during the weekend. 
+2. It is also possible to test the marketing campaign on the stations with high traffic with top 3 on: Streeter Dr & Grand Ave, Lake Shore Dr & Monroe St, and Millenium Park.
+3. Rides with longer trip duration can also be rewarded on annual members to attract casual riders as they have longer trip duration. 
